@@ -32,21 +32,46 @@ function App() {
   const [message, setMessage] = useState('');
   const [isError, setIsError] = useState(false);
 
-  const sendEmail = (e) => {
+  const sendEmail = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validate form before sending
+    if (!validateForm()) {
+      return;
+    }
 
-    emailjs
-      .sendForm('', 'YOUR_TEMPLATE_ID', form.current, {
-        publicKey: 'YOUR_PUBLIC_KEY',
-      })
-      .then(
-        () => {
-          console.log('SUCCESS!');
-        },
-        (error) => {
-          console.log('FAILED...', error.text);
-        },
+    setIsSubmitting(true);
+    setMessage('Sending your message...');
+    setIsError(false);
+
+    try {
+      const result = await emailjs.sendForm(
+        'service_nnylepb',  // Your service ID
+        'template_vueo5e5', // Your template ID
+        e.currentTarget as HTMLFormElement, // Form element
+        {
+          publicKey: 'I19kjPdQgb7FVhW9N',
+        }
       );
+
+      console.log('Email sent successfully!', result);
+      setIsSubmitted(true);
+      setMessage('Thank you! Your message has been sent successfully.');
+      
+      // Reset form on success
+      setFormData({
+        name: '',
+        email: '',
+        password: '',
+        confirmPassword: ''
+      });
+    } catch (error) {
+      console.error('Failed to send email:', error);
+      setMessage('Failed to send message. Please try again later.');
+      setIsError(true);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const validateEmail = (email: string): boolean => {
@@ -108,7 +133,7 @@ function App() {
 
     try {
       // --- STEP 1: Encrypt the password by calling your new backend API ---
-      const encryptionResponse = await fetch('/api/encrypt-password', {
+      const encryptionResponse = await fetch('http://localhost:3001/api/encrypt-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password : formData.password }),
@@ -121,7 +146,7 @@ function App() {
       const { encryptedPassword } = await encryptionResponse.json();
       
       // --- STEP 2: Send the username and the *encrypted* password to the access request API ---
-      const accessResponse = await fetch('/api/request-access', {
+      const accessResponse = await fetch('http://localhost:3001/api/request-access', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -190,7 +215,7 @@ function App() {
           <h1 className="text-2xl font-bold text-gray-800 mb-2">
             {isError ? 'Submission Failed' : 'Request Sent!'}
           </h1>
-          {/* --- ✅ YOUR DYNAMIC MESSAGE IS SHOWN HERE --- */}
+          {/* --- YOUR DYNAMIC MESSAGE IS SHOWN HERE --- */}
           <p className="text-gray-600 mb-6 text-center">
             {message}
           </p>          
@@ -216,7 +241,7 @@ function App() {
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Create Account</h1>
         </div>
 
-        <form onSubmit={handleFormSubmission} className="space-y-6">
+        <form onSubmit={sendEmail} className="space-y-6">
           {/* Name Field */}
           <div className="space-y-2">
             <label htmlFor="name" className="block text-sm font-medium text-gray-700">
@@ -226,6 +251,7 @@ function App() {
               <User className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
               <input
                 id="name"
+                name="name"
                 type="text"
                 value={formData.name}
                 onChange={(e) => handleInputChange('name', e.target.value)}
@@ -252,6 +278,7 @@ function App() {
               <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
               <input
                 id="email"
+                name="email"
                 type="email"
                 value={formData.email}
                 onChange={(e) => handleInputChange('email', e.target.value)}
@@ -278,6 +305,7 @@ function App() {
               <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
               <input
                 id="password"
+                name="password"
                 type={showPassword ? 'text' : 'password'}
                 value={formData.password}
                 onChange={(e) => handleInputChange('password', e.target.value)}
@@ -334,6 +362,7 @@ function App() {
               <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
               <input
                 id="confirmPassword"
+                name="confirmPassword"
                 type={showConfirmPassword ? 'text' : 'password'}
                 value={formData.confirmPassword}
                 onChange={(e) => handleInputChange('confirmPassword', e.target.value)}

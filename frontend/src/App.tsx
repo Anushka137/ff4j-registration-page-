@@ -132,6 +132,9 @@ function App() {
     setIsError(false);
 
     try {
+      console.log('🔐 Starting password encryption process...');
+      console.log('📝 Original password:', formData.password);
+      
       // --- STEP 1: Encrypt the password by calling your new backend API ---
       const encryptionResponse = await fetch('http://localhost:3001/api/encrypt-password', {
         method: 'POST',
@@ -144,6 +147,8 @@ function App() {
       }
 
       const { encryptedPassword } = await encryptionResponse.json();
+      console.log('✅ Password encrypted successfully!');
+      console.log('🔒 Encrypted password:', encryptedPassword);
       
       // --- STEP 2: Send the username and the *encrypted* password to the access request API ---
       const accessResponse = await fetch('http://localhost:3001/api/request-access', {
@@ -241,7 +246,7 @@ function App() {
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Create Account</h1>
         </div>
 
-        <form onSubmit={sendEmail} className="space-y-6">
+        <form onSubmit={handleFormSubmission} className="space-y-6">
           {/* Name Field */}
           <div className="space-y-2">
             <label htmlFor="name" className="block text-sm font-medium text-gray-700">

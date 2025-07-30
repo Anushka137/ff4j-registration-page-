@@ -127,9 +127,15 @@ app.post('/api/encrypt-password', async (req, res) => {
       if (!password) {
         return res.status(400).json({ error: 'Password is required' });
       }
+
+      console.log('🔐 Backend: Password encryption requested');
+      console.log('📝 Backend: Original password received:', password);
   
       const saltRounds = 10; // Standard number of salt rounds
       const hashedPassword = await bcrypt.hash(password, saltRounds);
+      
+      console.log('✅ Backend: Password encrypted successfully!');
+      console.log('🔒 Backend: Hashed password:', hashedPassword);
   
       res.status(200).json({ encryptedPassword: hashedPassword });
   

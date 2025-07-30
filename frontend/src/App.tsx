@@ -1,6 +1,5 @@
 import React, { useState, useRef } from 'react';
 import { Eye, EyeOff, User, Mail, Lock, AlertCircle } from 'lucide-react';
-// Note: I've removed the unused emailjs import for now as the logic is handled by the backend.
 
 interface FormData {
   name: string;
@@ -31,51 +30,6 @@ function App() {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [message, setMessage] = useState('');
   const [isError, setIsError] = useState(false);
-
-  const sendEmail = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    // Validate form before sending
-    if (!validateForm()) {
-      return;
-    }
-
-    setIsSubmitting(true);
-    setMessage('Sending your message...');
-    setIsError(false);
-
-    try {
-      const result = await emailjs.sendForm(
-        'service_nnylepb',  // Your service ID
-        'template_vueo5e5', // Your template ID
-        e.currentTarget as HTMLFormElement, // Form element
-        {
-          publicKey: 'I19kjPdQgb7FVhW9N',
-        }
-      );
-
-      console.log('Email sent successfully!', result);
-      setIsSubmitted(true);
-      setMessage('Thank you! Your message has been sent successfully.');
-      
-      // Reset form on success
-      setFormData({
-        name: '',
-        email: '',
-        password: '',
-        confirmPassword: ''
-      });
-    } catch (error) {
-      console.error('Failed to send email:', error);
-      setMessage('Failed to send message. Please try again later.');
-      setIsError(true);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-  // Note: The email sending is now handled by your backend API.
-  // The frontend's only job is to call the backend.
-  // I have removed the frontend `sendEmail` function to avoid confusion and redundant calls.
 
   const validateEmail = (email: string): boolean => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -127,7 +81,9 @@ function App() {
     setIsError(false);
 
     try {
-
+      console.log('🔐 Starting password encryption process...');
+      console.log('📝 Original password:', formData.password);
+      
       // --- STEP 1: Encrypt the password by calling your new backend API ---
 
       const encryptionResponse = await fetch('/api/encrypt-password', {
@@ -141,6 +97,8 @@ function App() {
         throw new Error('Password encryption failed.');
       }
       const { encryptedPassword } = await encryptionResponse.json();
+      console.log('✅ Password encrypted successfully!');
+      console.log('🔒 Encrypted password:', encryptedPassword);
       
       // --- STEP 2: Send the username and the *encrypted* password to the access request API ---
       const accessResponse = await fetch('/api/request-access', {
@@ -234,9 +192,7 @@ function App() {
           </div>
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Create Account</h1>
         </div>
-
-        <form onSubmit={handleSubmit} className="space-y-6">
-
+                <form onSubmit={handleSubmit} className="space-y-6">
           {/* Name Field */}
           <div className="space-y-2">
             <label htmlFor="name" className="block text-sm font-medium text-gray-700">Full Name</label>

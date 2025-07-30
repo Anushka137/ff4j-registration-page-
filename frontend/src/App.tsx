@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { Eye, EyeOff, User, Mail, Lock, CheckCircle, AlertCircle } from 'lucide-react';
-import emailjs from '@emailjs/browser';
+import React, { useState, useRef } from 'react';
+import { Eye, EyeOff, User, Mail, Lock, AlertCircle } from 'lucide-react';
+// Note: I've removed the unused emailjs import for now as the logic is handled by the backend.
 
 interface FormData {
   name: string;
@@ -73,6 +73,9 @@ function App() {
       setIsSubmitting(false);
     }
   };
+  // Note: The email sending is now handled by your backend API.
+  // The frontend's only job is to call the backend.
+  // I have removed the frontend `sendEmail` function to avoid confusion and redundant calls.
 
   const validateEmail = (email: string): boolean => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -86,7 +89,6 @@ function App() {
   const handleInputChange = (field: keyof FormData, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     
-    // Clear error when user starts typing
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: undefined }));
     }
@@ -95,22 +97,17 @@ function App() {
   const validateForm = (): boolean => {
     const newErrors: FormErrors = {};
 
-    if (!formData.name.trim()) {
-      newErrors.name = 'Name is required';
-    }
-
+    if (!formData.name.trim()) newErrors.name = 'Name is required';
     if (!formData.email.trim()) {
       newErrors.email = 'Email is required';
     } else if (!validateEmail(formData.email)) {
       newErrors.email = 'Please enter a valid email address';
     }
-
     if (!formData.password) {
       newErrors.password = 'Password is required';
     } else if (!validatePassword(formData.password)) {
       newErrors.password = 'Password must be at least 8 characters long';
     }
-
     if (!formData.confirmPassword) {
       newErrors.confirmPassword = 'Please confirm your password';
     } else if (formData.password !== formData.confirmPassword) {
@@ -123,55 +120,61 @@ function App() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!validateForm()) return;
 
-    if(!validateForm()){
-      return;
-    }
-
+    setIsSubmitting(true); // Set submitting state to true
     setMessage('Processing...');
     setIsError(false);
 
     try {
+
       // --- STEP 1: Encrypt the password by calling your new backend API ---
-      const encryptionResponse = await fetch('http://localhost:3001/api/encrypt-password', {
+
+      const encryptionResponse = await fetch('/api/encrypt-password', {
+
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password : formData.password }),
+        body: JSON.stringify({ password: formData.password }),
       });
 
       if (!encryptionResponse.ok) {
         throw new Error('Password encryption failed.');
       }
-
       const { encryptedPassword } = await encryptionResponse.json();
       
       // --- STEP 2: Send the username and the *encrypted* password to the access request API ---
-      const accessResponse = await fetch('http://localhost:3001/api/request-access', {
+      const accessResponse = await fetch('/api/request-access', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           username: formData.name,
-          email : formData.email,
-          password: encryptedPassword, // Use the hash received from the first API call
+          email: formData.email,
+          password: encryptedPassword,
         }),
       });
 
+      if (!accessResponse.ok) {
+          const errorData = await accessResponse.json();
+          throw new Error(errorData.message || 'Failed to submit access request.');
+      }
+
       const data = await accessResponse.json();
       setMessage(data.message);
-      
-      setIsSubmitted(true);// Display "Request received..."
+      setIsSubmitted(true);
+      setIsError(false);
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('Submission failed:', error);
-      setMessage('An error occurred. Please try again.');
+      setMessage(error.message || 'An error occurred. Please try again.');
+      setIsError(true);
+      setIsSubmitted(true); // Go to the status page even on error
+    } finally {
+      setIsSubmitting(false); // Reset submitting state
     }
   };
-
-
   
-  const getPasswordStrength = (password: string): { strength: number; text: string; color: string } => {
+  const getPasswordStrength = (password: string) => {
     if (password.length === 0) return { strength: 0, text: '', color: '' };
-    
     let strength = 0;
     if (password.length >= 8) strength += 25;
     if (/[A-Z]/.test(password)) strength += 25;
@@ -190,12 +193,8 @@ function App() {
     setIsSubmitted(false);
     setFormData({ name: '', email: '', password: '', confirmPassword: '' });
     setErrors({});
-  };
-
-  const handleFormSubmission = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault(); // Prevent the page from refreshing
-    handleSubmit(event); // Call your first function
-    sendEmail(event);    // Call your second function
+    setMessage('');
+    setIsError(false);
   };
 
   if (isSubmitted) {
@@ -203,23 +202,18 @@ function App() {
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-50 flex items-center justify-center p-4">
         <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center">
           <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${isError ? 'bg-red-100' : 'bg-green-100'}`}> 
-          {isError ? (
-            // Error Icon (X)
-            <svg className="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-          ) : (
-            // Success Icon (Checkmark)
-            <svg className="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
-          )}
+            {isError ? (
+              <svg className="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            ) : (
+              <svg className="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
+            )}
           </div>
-          {/* --- Dynamic Title --- */}
           <h1 className="text-2xl font-bold text-gray-800 mb-2">
-            {isError ? 'Submission Failed' : 'Request Sent!'}
+            {isError ? 'Submission Failed' : 'Email verfiication!'}
           </h1>
-          {/* --- YOUR DYNAMIC MESSAGE IS SHOWN HERE --- */}
           <p className="text-gray-600 mb-6 text-center">
             {message}
           </p>          
-        
           <button
             onClick={handleBackToRegistration}
             className="w-full py-3 px-4 rounded-xl font-medium text-white bg-blue-600 hover:bg-blue-700 transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
@@ -241,41 +235,25 @@ function App() {
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Create Account</h1>
         </div>
 
-        <form onSubmit={sendEmail} className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-6">
+
           {/* Name Field */}
           <div className="space-y-2">
-            <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-              Full Name
-            </label>
+            <label htmlFor="name" className="block text-sm font-medium text-gray-700">Full Name</label>
             <div className="relative">
               <User className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <input
-                id="name"
-                name="name"
-                type="text"
-                value={formData.name}
-                onChange={(e) => handleInputChange('name', e.target.value)}
-                placeholder="Enter your full name"
-                className={`w-full pl-11 pr-4 py-3 border rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                  errors.name ? 'border-red-500 bg-red-50' : 'border-gray-300 hover:border-gray-400'
-                }`}
+              <input id="name" type="text" value={formData.name} onChange={(e) => handleInputChange('name', e.target.value)} placeholder="Enter your full name"
+                className={`w-full pl-11 pr-4 py-3 border rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors.name ? 'border-red-500 bg-red-50' : 'border-gray-300 hover:border-gray-400'}`}
               />
             </div>
-            {errors.name && (
-              <div className="flex items-center space-x-1 text-red-600 text-sm">
-                <AlertCircle className="w-4 h-4" />
-                <span>{errors.name}</span>
-              </div>
-            )}
+            {errors.name && (<div className="flex items-center space-x-1 text-red-600 text-sm"><AlertCircle className="w-4 h-4" /><span>{errors.name}</span></div>)}
           </div>
-
           {/* Email Field */}
           <div className="space-y-2">
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-              Email Address
-            </label>
+            <label htmlFor="email" className="block text-sm font-medium text-gray-700">Email Address</label>
             <div className="relative">
               <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+
               <input
                 id="email"
                 name="email"
@@ -286,21 +264,14 @@ function App() {
                 className={`w-full pl-11 pr-4 py-3 border rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
                   errors.email ? 'border-red-500 bg-red-50' : 'border-gray-300 hover:border-gray-400'
                 }`}
-              />
+/>
             </div>
-            {errors.email && (
-              <div className="flex items-center space-x-1 text-red-600 text-sm">
-                <AlertCircle className="w-4 h-4" />
-                <span>{errors.email}</span>
-              </div>
-            )}
+            {errors.email && (<div className="flex items-center space-x-1 text-red-600 text-sm"><AlertCircle className="w-4 h-4" /><span>{errors.email}</span></div>)}
           </div>
 
           {/* Password Field */}
           <div className="space-y-2">
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-              Password
-            </label>
+            <label htmlFor="password" className="block text-sm font-medium text-gray-700">Password</label>
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
               <input
@@ -313,51 +284,25 @@ function App() {
                 className={`w-full pl-11 pr-12 py-3 border rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
                   errors.password ? 'border-red-500 bg-red-50' : 'border-gray-300 hover:border-gray-400'
                 }`}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
-              >
+                />
+              <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors">
                 {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
               </button>
             </div>
-            
-            {/* Password Strength Indicator */}
             {formData.password && (
-              <div className="space-y-2">
+              <div className="space-y-2 pt-2">
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-gray-600">Password strength</span>
-                  <span className={`font-medium ${
-                    passwordStrength.strength <= 25 ? 'text-red-600' :
-                    passwordStrength.strength <= 50 ? 'text-yellow-600' :
-                    passwordStrength.strength <= 75 ? 'text-blue-600' : 'text-green-600'
-                  }`}>
-                    {passwordStrength.text}
-                  </span>
+                  <span className={`font-medium ${passwordStrength.strength <= 25 ? 'text-red-600' : passwordStrength.strength <= 50 ? 'text-yellow-600' : passwordStrength.strength <= 75 ? 'text-blue-600' : 'text-green-600'}`}>{passwordStrength.text}</span>
                 </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div 
-                    className={`h-2 rounded-full transition-all duration-300 ${passwordStrength.color}`}
-                    style={{ width: `${passwordStrength.strength}%` }}
-                  ></div>
-                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2"><div className={`h-2 rounded-full transition-all duration-300 ${passwordStrength.color}`} style={{ width: `${passwordStrength.strength}%` }}></div></div>
               </div>
             )}
-            
-            {errors.password && (
-              <div className="flex items-center space-x-1 text-red-600 text-sm">
-                <AlertCircle className="w-4 h-4" />
-                <span>{errors.password}</span>
-              </div>
-            )}
+            {errors.password && (<div className="flex items-center space-x-1 text-red-600 text-sm"><AlertCircle className="w-4 h-4" /><span>{errors.password}</span></div>)}
           </div>
-
           {/* Confirm Password Field */}
           <div className="space-y-2">
-            <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
-              Confirm Password
-            </label>
+            <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">Confirm Password</label>
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
               <input
@@ -370,42 +315,23 @@ function App() {
                 className={`w-full pl-11 pr-12 py-3 border rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
                   errors.confirmPassword ? 'border-red-500 bg-red-50' : 'border-gray-300 hover:border-gray-400'
                 }`}
-              />
-              <button
-                type="button"
-                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
-              >
+                />
+              <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors">
                 {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
               </button>
-
             </div>
-            {errors.confirmPassword && (
-              <div className="flex items-center space-x-1 text-red-600 text-sm">
-                <AlertCircle className="w-4 h-4" />
-                <span>{errors.confirmPassword}</span>
-              </div>
-            )}
+            {errors.confirmPassword && (<div className="flex items-center space-x-1 text-red-600 text-sm"><AlertCircle className="w-4 h-4" /><span>{errors.confirmPassword}</span></div>)}
           </div>
-
           {/* Submit Button */}
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className={`w-full py-3 px-4 rounded-xl font-medium text-white transition-all duration-200 transform ${
-              isSubmitting
-                ? 'bg-blue-400 cursor-not-allowed'
-                : 'bg-blue-600 hover:bg-blue-700 hover:scale-[1.02] active:scale-[0.98]'
-            } focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2`}
+          <button type="submit" disabled={isSubmitting}
+            className={`w-full py-3 px-4 rounded-xl font-medium text-white transition-all duration-200 transform ${isSubmitting ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 hover:scale-[1.02] active:scale-[0.98]'} focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2`}
           >
             {isSubmitting ? (
               <div className="flex items-center justify-center space-x-2">
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                 <span>Creating Account...</span>
               </div>
-            ) : (
-              'Create Account'
-            )}
+            ) : ( 'Create Account' )}
           </button>
         </form>
       </div>

@@ -17,107 +17,89 @@ const pendingRequests = [];
 const approvedUsers = [];
 
 // --- API Endpoints ---
-app.post('/api/request-access', (req, res) => {
-  const { username, password } = req.body;
-  console.log('Access Request for:', username);
-  // TODO: Add database logic here
-  res.status(200).json({ message: 'Request received and is pending approval.' });
+
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: 't-ishi.gupta@ocltp.com', // Your full Gmail address
+    pass: 'uspp zxkb vfou gnxh'     // The 16-character App Password
+  },
+  tls: {
+    rejectUnauthorized: false
+  }
 });
-//EMAILJS
 
-
-// --- Function to Send Email from Backend ---
-async function sendApprovalEmailToManager(userDetails, approvalLink, denyLink) {
-  // 1. Configure how to send the email (e.g., with Gmail)
-  let transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: 'YOUR_GMAIL_ADDRESS@gmail.com', // Your email
-      pass: 'YOUR_GMAIL_APP_PASSWORD' // Your Gmail App Password
-    }
-  });
-
-  // 2. Define the email content
-  let mailOptions = {
-    from: '"Your App Name" <YOUR_GMAIL_ADDRESS@gmail.com>',
-    to: 'manager-email@example.com', // The manager's email address
-    subject: `New User Signup Approval: ${userDetails.username}`,
-    html: `
-      <h3>New Access Request</h3>
-      <p>A new user has signed up and is waiting for approval.</p>
-      <ul>
-        <li><strong>Username:</strong> ${userDetails.username}</li>
-        <li><strong>Email:</strong> ${userDetails.email || 'Not provided'}</li>
-      </ul>
-      <p>
-        <a href="${approvalLink}" style="padding: 10px 15px; background-color: #28a745; color: white; text-decoration: none; border-radius: 5px;">Approve Request</a>
-      </p>
-      <p>
-        <a href="${denyLink}" style="padding: 10px 15px; background-color: #dc3545; color: white; text-decoration: none; border-radius: 5px;">Deny Request</a>
-      </p>
-    `
-  };
-
-  // 3. Send the email
-  await transporter.sendMail(mailOptions);
-  console.log('Approval email sent to manager.');
-}
 
 
 // --- API Endpoint for Signup ---
 app.post('/api/request-access', async (req, res) => {
-  const { username, password } = req.body; // password is the encrypted hash
-
-  // Create and save the request
-  const approvalToken = crypto.randomBytes(32).toString('hex');
-  const newRequest = { username, encrypted_password: password, approval_token: approvalToken };
-  pendingRequests.push(newRequest); // TODO: Replace with database logic
-
-  // Create the approval/deny links
-  const approvalLink = `http://localhost:3001/api/approve?token=${approvalToken}`;
-  const denyLink = `http://localhost:3001/api/deny?token=${approvalToken}`;
-
-  // ✅ Call the function to send the email from the server
   try {
-    await sendApprovalEmailToManager({ username }, approvalLink, denyLink);
+    const { username, email, password } = req.body; // password is the hash
+
+    if (!username || !email || !password) {
+      return res.status(400).json({ message: 'Username, email, and password are required.' });
+    }
+
+    // A. Create and save the pending request
+    const approvalToken = crypto.randomBytes(32).toString('hex');
+    const newRequest = { username, email, encrypted_password: password, approval_token: approvalToken };
+    pendingRequests.push(newRequest);
+    console.log('New access request saved:', newRequest);
+
+    // B. Prepare email content
+    // const approvalLink = `http://localhost:3001/api/approve?token=${approvalToken}`;
+    // const denyLink = `http://localhost:3001/api/deny?token=${approvalToken}`;
+
+    const mailOptions = {
+      from: `"Your App Name" <ishigupta1201@gmail.com>`,
+      to: email, // The manager's email address
+      // replyTo: email,
+      subject: `New Access Request: ${username}`,
+      html: `
+        <div style="font-family: system-ui, sans-serif, Arial; font-size: 12px;">
+  <div>A message by {{name}} has been received. Kindly respond at your earliest convenience.</div>
+
+  <div style="margin-top: 20px; padding: 15px 0; border-width: 1px 0; border-style: dashed; border-color: lightgrey;">
+    <table role="presentation">
+      <tbody>
+        <tr>
+          <td style="vertical-align: top;">
+            <div style="padding: 6px 10px; margin: 0 10px; background-color: aliceblue; border-radius: 5px; font-size: 26px;" role="img">👤</div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <br><span class="mtk1">Hello {{name}},</span><br><br>
+    <span class="mtk1">Please click the button below to verify your email:</span><br><br>
+
+    <!-- Button Starts Here -->
+    <a href="http://localhost:5173/feature-flags" target="_blank" style="display: inline-block; background-color: #007BFF; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold;">Click Here</a>
+    <br><br>
+    <!-- Button Ends Here -->
+
+    
+    <span class="mtk1">If you didn't create an account, please ignore this email.</span><br><br>
+    <span class="mtk1">Best regards,</span><br>
+    <span class="mtk1">Your App Team</span>
+  </div>
+</div>`
+      
+    };
+
+    // C. Send the email using the configured transporter
+    await transporter.sendMail(mailOptions);
+    console.log(`Approval email sent for user: ${username}`);
     res.status(200).json({ message: 'Request submitted! It will be reviewed by a manager.' });
+
   } catch (error) {
-    console.error("Failed to send email:", error);
-    res.status(500).json({ message: 'Request submitted, but failed to send notification email.' });
+    console.error('--- ERROR in /api/request-access ---', error);
+    res.status(500).json({ message: 'Server failed to process the request.' });
   }
 });
-
 // TODO: Add other endpoints like /api/approve and /api/login here
 // --- API Endpoints ---
-
-// server.js
-
-// ... (your existing code for express, cors, bcrypt, etc.)
-
-// Endpoint to securely hash a password
-app.post('/api/encrypt-password', async (req, res) => {
-    try {
-      const { password } = req.body;
   
-      if (!password) {
-        return res.status(400).json({ error: 'Password is required' });
-      }
-  
-      const saltRounds = 10;
-      const hashedPassword = await bcrypt.hash(password, saltRounds);
-  
-      // ✅ --- THIS LINE PRINTS THE ENCRYPTED PASSWORD ---
-      console.log('Generated Hash:', hashedPassword);
-      
-      res.status(200).json({ encryptedPassword: hashedPassword });
-  
-    } catch (error) {
-      console.error('Encryption error:', error);
-      res.status(500).json({ error: 'Server error during encryption' });
-    }
-  });
-  
-  // ... (the rest of your server code)
 
 // NEW: Endpoint to securely hash a password
 app.post('/api/encrypt-password', async (req, res) => {
@@ -162,49 +144,6 @@ app.get('/api/approve', (req, res) => {
     res.send('<h1>Request Denied</h1><p>The user has not been granted access.</p>');
   });
   
-  
-//   // Your existing endpoint for requesting access
-//   app.post('/api/request-access', (req, res) => {
-//     const { username, password } = req.body; // 'password' is the encrypted hash
-  
-//     // 1. Basic Validation
-//     if (!username || !password) {
-//       return res.status(400).json({ error: 'Username and encrypted password are required.' });
-//     }
-    
-//     // 2. Generate a unique and secure approval token
-//     const approvalToken = crypto.randomBytes(32).toString('hex');
-    
-//     const newRequest = {
-//       username,
-//       encrypted_password: password,
-//       approval_token: approvalToken,
-//       status: 'pending',
-//       request_date: new Date()
-//     };
-    
-//     // 3. Store the request
-//     // TODO: Replace this with your actual database logic
-//     pendingRequests.push(newRequest);
-//     console.log('New request added to pending requests:', newRequest);
-    
-//     // 4. Send the approval email
-//     // TODO: Integrate your actual email service (SendGrid, Mailgun, etc.) here
-//     console.log('--- APPROVAL EMAIL SIMULATION ---');
-//     console.log(`To: Approver`);
-//     console.log(`From: System`);
-//     console.log(`Subject: Access Request for ${username}`);
-//     console.log(`Approve Link: http://localhost:${PORT}/api/approve?token=${approvalToken}`);
-//     console.log(`Deny Link: http://localhost:${PORT}/api/deny?token=${approvalToken}`);
-//     console.log('---------------------------------');
-    
-//     // 5. Send success response to the frontend
-//     res.status(200).json({ message: 'Request received and is pending approval.' });
-//   });
-  
-  
-
-
 // --- Start Server ---
 app.listen(PORT, () => {
   console.log(`Backend server running on http://localhost:${PORT}`);

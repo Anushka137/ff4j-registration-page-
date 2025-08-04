@@ -14,14 +14,18 @@ A comprehensive feature flag management system with user registration, approval 
 - Create, edit, delete, and toggle feature flags
 - Permission-based access control
 - Manager approval required for all changes
-- Real-time updates with auto-refresh
-- Persistent storage with file-based system
+- Real-time updates with auto-refresh (30-second intervals)
+- Persistent storage with separate file-based systems
+- Separate token storage for feature changes vs user approvals
+- Automatic token expiry and cleanup
 
 ### **Email System**
 - Automated email notifications
 - Manager approval requests
 - User confirmation emails
 - Fallback handling for email failures
+- Fresh SMTP connections for each email
+- Enhanced error handling and logging
 
 ## 🛠️ Technology Stack
 
@@ -44,20 +48,23 @@ A comprehensive feature flag management system with user registration, approval 
 ```
 ffj-paytm/
 ├── backend/
-│   ├── server.js              # Main backend server
+│   ├── server.js              # Main backend server with all endpoints
 │   ├── package.json           # Backend dependencies
-│   ├── token-storage.json     # User approval tokens
-│   ├── feature-changes.json   # Feature change requests
-│   └── feature-flags.json     # Feature flag data
+│   ├── token-storage.json     # User approval tokens (auto-generated)
+│   ├── feature-changes.json   # Feature change requests (auto-generated)
+│   ├── feature-flags.json     # Feature flag data (auto-generated)
+│   └── .env                   # Environment variables (create this)
 ├── frontend/
 │   ├── src/
 │   │   ├── pages/
 │   │   │   ├── LoginPage.tsx      # User registration/login
-│   │   │   └── FeatureFlagPage.tsx # Feature flag dashboard
-│   │   ├── App.tsx            # Main app component
+│   │   │   └── FeatureFlagPage.tsx # Feature flag dashboard with auto-refresh
+│   │   ├── App.tsx            # Main app component with routing
 │   │   └── main.tsx           # React entry point
 │   ├── package.json           # Frontend dependencies
-│   └── vite.config.ts         # Vite configuration
+│   ├── vite.config.ts         # Vite configuration with API proxy
+│   └── tailwind.config.js     # Tailwind CSS configuration
+├── .gitignore                 # Git ignore rules
 └── README.md                  # Project documentation
 ```
 
@@ -81,15 +88,26 @@ npm install
 ```
 
 ### **3. Configure Email Settings**
-Update the email configuration in `backend/server.js`:
+The system now uses a fresh transporter for each email to prevent connection issues. Update the email configuration in `backend/server.js`:
+
 ```javascript
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: 'your-email@gmail.com',
-    pass: 'your-app-password'
-  }
-});
+function createTransporter() {
+  return nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: 'your-email@gmail.com',
+      pass: 'your-app-password'
+    },
+    port: 587,
+    secure: false,
+    connectionTimeout: 60000,
+    greetingTimeout: 30000,
+    socketTimeout: 60000,
+    pool: false,
+    maxConnections: 1,
+    maxMessages: 1
+  });
+}
 ```
 
 ### **4. Start Backend Server**
@@ -121,11 +139,12 @@ Frontend will run on `http://localhost:5173`
 
 ### **Feature Flag Management**
 1. Visit `http://localhost:5173/feature-flags`
-2. View current feature flags
+2. View current feature flags with real-time updates
 3. Request changes (toggle, add, edit, delete)
-4. Manager receives approval email
-5. Manager approves/denies changes
-6. Changes are applied automatically
+4. Manager receives approval email with detailed information
+5. Manager approves/denies changes via email links
+6. Changes are applied automatically and reflected in real-time
+7. Users receive confirmation emails for approved/denied changes
 
 ## 🔧 API Endpoints
 
@@ -151,17 +170,25 @@ Frontend will run on `http://localhost:5173`
 
 - **Password Encryption**: bcrypt with salt rounds
 - **Secure Tokens**: Crypto-generated approval tokens
-- **Token Expiry**: 24-hour token expiration
+- **Token Expiry**: 24-hour token expiration with automatic cleanup
 - **Input Validation**: Server-side validation
 - **CORS Protection**: Configured for local development
+- **Separate Storage**: Feature changes and user approvals use separate storage systems
+- **Fresh Connections**: Each email uses a new SMTP connection to prevent timeouts
 
 ## 📧 Email Configuration
 
-The system uses Gmail SMTP for sending emails. You need to:
+The system uses Gmail SMTP for sending emails with enhanced reliability. You need to:
 
 1. Enable 2-Factor Authentication on your Gmail account
 2. Generate an App Password
 3. Update the email configuration in `backend/server.js`
+
+### **Email Features:**
+- **Fresh Connections**: Each email uses a new SMTP connection
+- **Fallback Handling**: System continues working even if emails fail
+- **Detailed Notifications**: Rich HTML emails with approval/denial links
+- **Error Logging**: Comprehensive logging for troubleshooting
 
 ## 🚀 Deployment
 
@@ -179,6 +206,40 @@ GMAIL_PASS=your-app-password
 - Use a production database instead of file storage
 - Configure proper email service
 - Set up SSL/TLS certificates
+- Implement proper logging and monitoring
+- Set up automated backups for data files
+
+## 🔧 Troubleshooting
+
+### **Common Issues:**
+
+#### **Email Not Sending:**
+- Check Gmail App Password is correct
+- Ensure 2-Factor Authentication is enabled
+- Check network connectivity
+- Review server logs for detailed error messages
+
+#### **Feature Changes Not Working:**
+- Ensure backend server is running on port 3001
+- Check browser console for JavaScript errors
+- Verify API endpoints are accessible
+- Check pending feature changes: `GET /api/pending-feature-changes`
+
+#### **Tokens Expiring:**
+- Tokens automatically expire after 24 hours
+- Use `POST /api/clean-expired-tokens` to clean expired tokens
+- Check token storage files for debugging
+
+#### **Frontend Not Updating:**
+- Frontend auto-refreshes every 30 seconds
+- Use the manual refresh button if needed
+- Check network connectivity to backend
+
+### **Debug Endpoints:**
+- `GET /api/pending-requests` - View pending user requests
+- `GET /api/pending-feature-changes` - View pending feature changes
+- `GET /api/approved-users` - View approved users
+- `GET /api/feature-flags` - View current feature flags
 
 ## 🤝 Contributing
 

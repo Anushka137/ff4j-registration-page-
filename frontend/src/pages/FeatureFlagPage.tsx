@@ -58,28 +58,36 @@ function App(): JSX.Element {
   };
 
   const requestFeatureChange = async (action: string, flagData?: any) => {
+    console.log('Requesting feature change:', { action, flagData });
     try {
+      const requestBody = {
+        action,
+        flagData,
+        username: currentUser.username,
+        email: currentUser.email
+      };
+      console.log('Request body:', requestBody);
+      
       const response = await fetch('/api/request-feature-change', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          action,
-          flagData,
-          username: currentUser.username,
-          email: currentUser.email
-        }),
+        body: JSON.stringify(requestBody),
       });
 
+      console.log('Response status:', response.status);
+      
       if (response.ok) {
         const result = await response.json();
+        console.log('Success response:', result);
         setMessage(result.message + ' - You will receive an email when the manager approves or denies your request.');
         setIsError(false);
         // Show success message
         setTimeout(() => setMessage(''), 8000);
       } else {
         const error = await response.json();
+        console.error('Error response:', error);
         setMessage(error.message || 'Failed to submit request');
         setIsError(true);
       }
@@ -100,9 +108,14 @@ function App(): JSX.Element {
   };
 
   const handleDeleteFlag = (id: string): void => {
+    console.log('handleDeleteFlag called with id:', id);
     const flag = featureFlags.find(f => f.id === id);
+    console.log('Found flag:', flag);
     if (flag && window.confirm('Are you sure you want to delete this feature flag?')) {
+      console.log('User confirmed deletion');
       requestFeatureChange('delete', { id, name: flag.name });
+    } else {
+      console.log('User cancelled deletion or flag not found');
     }
   };
 
@@ -117,11 +130,14 @@ function App(): JSX.Element {
   };
 
   const handleSaveFlag = (flagToSave: FeatureFlag): void => {
+    console.log('handleSaveFlag called with:', flagToSave);
     if (flagToSave.id) {
       // Editing existing flag
+      console.log('Editing existing flag');
       requestFeatureChange('edit', flagToSave);
     } else {
       // Adding new flag
+      console.log('Adding new flag');
       requestFeatureChange('add', flagToSave);
     }
     handleCloseModal();

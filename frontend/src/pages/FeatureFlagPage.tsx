@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Plus, Edit, Trash2, X, Check, ToggleLeft, ToggleRight, Flag } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Plus, Edit, Trash2, X, Check, ToggleLeft, ToggleRight, Flag, AlertCircle } from 'lucide-react';
 
 // Define the structure for a single feature flag
 interface FeatureFlag {
@@ -9,32 +9,100 @@ interface FeatureFlag {
   isEnabled: boolean;
 }
 
-// Initial mock data for the feature flags
-const initialFlags: FeatureFlag[] = [
-  { id: '1', name: 'New User Dashboard', description: 'Enables the redesigned user dashboard.', isEnabled: true },
-  { id: '2', name: 'Dark Mode', description: 'Allows users to switch to a dark theme.', isEnabled: false },
-  { id: '3', name: 'Beta Feature X', description: 'A new experimental feature for testing.', isEnabled: true },
-];
+// Mock user data (in a real app, this would come from authentication)
+const currentUser = {
+  username: 'Anushka Shrivastava',
+  email: 'anushka.s.0711@gmail.com'
+};
 
 // The main App component that renders the dashboard
 function App(): JSX.Element {
-  const [featureFlags, setFeatureFlags] = useState<FeatureFlag[]>(initialFlags);
+  const [featureFlags, setFeatureFlags] = useState<FeatureFlag[]>([]);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [editingFlag, setEditingFlag] = useState<FeatureFlag | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [message, setMessage] = useState<string>('');
+  const [isError, setIsError] = useState<boolean>(false);
+  const [lastUpdate, setLastUpdate] = useState<string>('');
+
+  // Load feature flags from backend and set up periodic refresh
+  useEffect(() => {
+    fetchFeatureFlags();
+    
+    // Set up periodic refresh every 30 seconds to check for approved changes
+    const interval = setInterval(() => {
+      fetchFeatureFlags();
+    }, 30000); // 30 seconds
+
+    return () => clearInterval(interval);
+  }, []);
+
+  const fetchFeatureFlags = async () => {
+    try {
+      setIsRefreshing(true);
+      const response = await fetch('/api/feature-flags');
+      if (response.ok) {
+        const flags = await response.json();
+        setFeatureFlags(flags);
+        setLastUpdate(new Date().toLocaleTimeString());
+      } else {
+        console.error('Failed to fetch feature flags');
+      }
+    } catch (error) {
+      console.error('Error fetching feature flags:', error);
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  };
+
+  const requestFeatureChange = async (action: string, flagData?: any) => {
+    try {
+      const response = await fetch('/api/request-feature-change', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action,
+          flagData,
+          username: currentUser.username,
+          email: currentUser.email
+        }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        setMessage(result.message + ' - You will receive an email when the manager approves or denies your request.');
+        setIsError(false);
+        // Show success message
+        setTimeout(() => setMessage(''), 8000);
+      } else {
+        const error = await response.json();
+        setMessage(error.message || 'Failed to submit request');
+        setIsError(true);
+      }
+    } catch (error) {
+      console.error('Error requesting feature change:', error);
+      setMessage('Failed to submit request');
+      setIsError(true);
+    }
+  };
 
   // --- CRUD and State Functions ---
 
   const handleToggleFlag = (id: string): void => {
-    setFeatureFlags(flags =>
-      flags.map(flag =>
-        flag.id === id ? { ...flag, isEnabled: !flag.isEnabled } : flag
-      )
-    );
+    const flag = featureFlags.find(f => f.id === id);
+    if (flag) {
+      requestFeatureChange('toggle', { id, name: flag.name });
+    }
   };
 
   const handleDeleteFlag = (id: string): void => {
-    if (window.confirm('Are you sure you want to delete this feature flag?')) {
-      setFeatureFlags(flags => flags.filter(flag => flag.id !== id));
+    const flag = featureFlags.find(f => f.id === id);
+    if (flag && window.confirm('Are you sure you want to delete this feature flag?')) {
+      requestFeatureChange('delete', { id, name: flag.name });
     }
   };
 
@@ -51,18 +119,24 @@ function App(): JSX.Element {
   const handleSaveFlag = (flagToSave: FeatureFlag): void => {
     if (flagToSave.id) {
       // Editing existing flag
-      setFeatureFlags(flags =>
-        flags.map(flag => (flag.id === flagToSave.id ? flagToSave : flag))
-      );
+      requestFeatureChange('edit', flagToSave);
     } else {
       // Adding new flag
-      setFeatureFlags(flags => [
-        ...flags,
-        { ...flagToSave, id: new Date().toISOString() }, // Assign a unique ID
-      ]);
+      requestFeatureChange('add', flagToSave);
     }
     handleCloseModal();
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading feature flags...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-800 p-4 sm:p-6 lg:p-8">
@@ -73,17 +147,51 @@ function App(): JSX.Element {
             Feature Flag Dashboard
           </h1>
           <p className="text-gray-600 mt-1">Manage features and rollouts for your application.</p>
+          {message && (
+            <div className={`mt-4 p-4 rounded-lg flex items-center ${isError ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+              <AlertCircle className="w-5 h-5 mr-2" />
+              {message}
+            </div>
+          )}
         </header>
 
         <div className="bg-white rounded-lg shadow-md">
-          <div className="p-4 border-b border-gray-200 flex justify-end">
-            <button
-              onClick={() => handleOpenModal(null)}
-              className="flex items-center bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors duration-200"
-            >
-              <Plus className="w-5 h-5 mr-2" />
-              Add New Feature
-            </button>
+          <div className="p-4 border-b border-gray-200 flex justify-between items-center">
+            <div className="text-sm text-gray-600">
+              <strong>Note:</strong> All changes require manager approval
+              {lastUpdate && (
+                <span className="ml-4 text-xs text-gray-500">
+                  Last updated: {lastUpdate}
+                </span>
+              )}
+            </div>
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={fetchFeatureFlags}
+                disabled={isRefreshing}
+                className={`flex items-center font-semibold py-2 px-3 rounded-lg transition-colors duration-200 ${
+                  isRefreshing 
+                    ? 'bg-gray-200 text-gray-500 cursor-not-allowed' 
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                {isRefreshing ? (
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600 mr-1"></div>
+                ) : (
+                  <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                )}
+                {isRefreshing ? 'Refreshing...' : 'Refresh'}
+              </button>
+              <button
+                onClick={() => handleOpenModal(null)}
+                className="flex items-center bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors duration-200"
+              >
+                <Plus className="w-5 h-5 mr-2" />
+                Add New Feature
+              </button>
+            </div>
           </div>
           
           <div className="overflow-x-auto">

@@ -253,10 +253,13 @@ GMAIL_PASS=your-app-password
 
 This project is licensed under the MIT License.
 
-## 👥 Author
+## 👥 Authors
 
 **Anushka Shrivastava**
 - GitHub: [@Anushka137](https://github.com/Anushka137)
+
+**Ishi Gupta**
+- GitHub: [@ishigupta1201](https://github.com/ishigupta1201)
 
 ## 🙏 Acknowledgments
 
